@@ -1,0 +1,46 @@
+{
+  "report_timezone": "Europe/Moscow",
+  "telegram_enabled": false,
+  "projects": [
+    {
+      "id": "demo-north",
+      "name": "Учебный магазин",
+      "city": "Север",
+      "mode": "monitoring",
+      "source_book": "demo-price-north",
+      "target_book": "demo-feed-north",
+      "launch_date": "2020-01-01",
+      "report_exclude_days": 10,
+      "notify_removal": false,
+      "routes": [
+        {
+          "name": "phones-apple",
+          "source": {"gid": 10, "header_row": 1, "first_col": 0, "last_col": 5, "keys": ["Model", "MemorySize", "SimConfig", "Color"], "price": "Price"},
+          "target": {"gid": 20, "header_row": 2, "keys": ["Model", "MemorySize", "SimConfig", "Color"], "where": {"Vendor": "Apple", "Condition": "Новое"}, "title": "Title", "category": "iPhone"}
+        },
+        {
+          "name": "phones-samsung",
+          "source": {"gid": 10, "header_row": 1, "first_col": 7, "last_col": 14, "keys": ["Vendor", "Model", "MemorySize", "SimConfig", "Color", "RamSize"], "price": "Price"},
+          "target": {"gid": 20, "header_row": 2, "keys": ["Vendor", "Model", "MemorySize", "SimConfig", "Color", "RamSize"], "where": {"Vendor": "Samsung", "Condition": "Новое"}, "title": "Title", "category": "Samsung"}
+        }
+      ]
+    },
+    {
+      "id": "demo-south",
+      "name": "Учебный магазин",
+      "city": "Юг",
+      "mode": "monitoring",
+      "source_book": "demo-price-south",
+      "target_book": "demo-feed-south",
+      "launch_date": "2020-01-01",
+      "report_exclude_days": 10,
+      "routes": [
+        {
+          "name": "watches",
+          "source": {"gid": 30, "header_row": 1, "keys": ["Title"], "price": "Price"},
+          "target": {"gid": 40, "header_row": 2, "keys": ["Title"], "title": "Title", "category": "Смарт-часы"}
+        }
+      ]
+    }
+  ]
+}

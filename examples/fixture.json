@@ -1,0 +1,22 @@
+{
+  "demo-price-north": {
+    "10": [
+      ["Model", "SimConfig", "MemorySize", "Color", "Price", null, null, "Vendor", "Model", "SimConfig", "MemorySize", "Color", "RamSize", "Price"],
+      ["iPhone Example", "eSIM", "128 ГБ", "синий", 27000, null, null, "Samsung", "Galaxy Example+", "SIM", "256 ГБ", "серый", "12 ГБ", 34000],
+      ["iPhone Example", "eSIM", "128 ГБ", "белый", null],
+      ["iPhone Example", "eSIM", "128 ГБ", "чёрный", null]
+    ]
+  },
+  "demo-feed-north": {
+    "20": [
+      ["Технический ID", "ID площадки", "Заголовок"],
+      ["Id", "AvitoId", "Title", "Model", "MemorySize", "SimConfig", "Color", "Vendor", "Condition", "RamSize", "Price"],
+      [null, null, "iPhone Example, синий", "iPhone Example", "128 ГБ", "eSIM", "синий", "Apple", "Новое", "4 ГБ", 27500],
+      ["000123", 9123456789, "iPhone Example, белый", "iPhone Example", "128 ГБ", "eSIM", "белый", "Apple", "Новое", "4 ГБ", 27500],
+      [null, null, "iPhone Example, чёрный", "iPhone Example", "128 ГБ", "eSIM", "чёрный", "Apple", "Новое", "4 ГБ"],
+      ["gxy-001", null, "Galaxy Example+", "Galaxy Example+", "256 ГБ", "SIM", "серый", "Samsung", "Новое", "12 ГБ", 34000]
+    ]
+  },
+  "demo-price-south": {"30": [["Title", "Price"], ["Watch Example", 4200]]},
+  "demo-feed-south": {"40": [["Номер", "Заголовок"], ["Id", "Title"], [null, "Watch Example"]]}
+}
