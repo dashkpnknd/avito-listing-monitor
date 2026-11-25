@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 import json
 import re
 
-from .model import Address, ScanError, canonical, cell_value, id_state, matched_position, unique_positions
+from .model import Address, ScanError, canonical, cell_value, describe_position, id_state, matched_position, report_columns, unique_positions
 
 
 FIELDS = {
@@ -108,6 +108,7 @@ def target_positions(sheet, source, grids, positions, identifiers, diagnostics):
         diagnostics.append({"code": "READ_ERROR", "detail": f'{tab["name"]}: повторяются заголовки товара'})
         return
     columns = {field: col for col, field in enumerate(fields) if field}
+    variant_columns = report_columns(rows[header_row - 1])
     # The displayed listing number can be on the human-readable line above
     # AvitoId. Prefer that explicit heading when it exists.
     if header_row > 1:
@@ -170,9 +171,11 @@ def target_positions(sheet, source, grids, positions, identifiers, diagnostics):
         identity = json.dumps([
             address.book, address.gid, book, tab["gid"], "auto", signature, key, condition, params.get("vendor"),
         ], ensure_ascii=False, separators=(",", ":"))
-        source_entry = (address, source_cell, None, None, None)
-        target_entry = (target, id_cell, str(title or " · ".join(key)), category,
-                        listing if re.fullmatch(r"[1-9][0-9]*", listing) else None)
+        source_entry = (address, source_cell)
+        title = str(title or " · ".join(key))
+        target_entry = (target, id_cell, title, category,
+                        listing if re.fullmatch(r"[1-9][0-9]*", listing) else None,
+                        describe_position(title, row, variant_columns))
         # Keep all claims until duplicate source/target checks have run.
         if identity in positions:
             diagnostics.append({

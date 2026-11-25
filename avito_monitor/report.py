@@ -93,6 +93,7 @@ def project_lines(store, project, snapshot, *, detailed):
         pending[operation["identity"]] = {
             "category": data.get("category") or "Прочее",
             "title": data["title"], "target": data["target_link"],
+            "report_title": data.get("report_title"),
         }
     removals = entries["NEEDS_REMOVAL"]
     for identity, item in pending.items():
@@ -111,17 +112,17 @@ def project_lines(store, project, snapshot, *, detailed):
             lines.append("• Нет позиций")
         for index, category in enumerate(sorted(categories, key=str.casefold)):
             positions = categories[category]
-            names = Counter(item["title"] for _, item in positions)
+            names = Counter(position_name(item) for _, item in positions)
             if index:
                 lines.append("")
             lines.append(f"• {category} — {len(positions)} шт.")
             for identity, item in sorted(positions, key=position_order):
-                name = " ".join(item["title"].split())
+                name = position_name(item)
                 cell = item["target"].partition("&range=")[2]
                 line = f"  ↳ {name}"
                 if detailed:
                     line += f' · {item["target"]}'
-                elif cell and names[item["title"]] > 1:
+                elif cell and names[name] > 1:
                     line += f" · {cell}"
                 if item.get("previous_id") is not None:
                     line += f' · прежний Id {item["previous_id"]}'
@@ -136,7 +137,11 @@ def project_lines(store, project, snapshot, *, detailed):
 def position_order(entry):
     _, item = entry
     match = re.search(r"&range=([A-Z]+)([0-9]+)$", item["target"])
-    return (item["title"].casefold(), int(match[2]) if match else 0, item["target"])
+    return (position_name(item).casefold(), int(match[2]) if match else 0, item["target"])
+
+
+def position_name(item):
+    return " ".join((item.get("report_title") or item["title"]).split())
 
 
 def paginate(heading, blocks):

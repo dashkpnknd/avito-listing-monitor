@@ -181,6 +181,8 @@ class MonitorTests(TestCase):
         self.assertIn("🏬 Учебный магазин | Север\n\n🟠 НЕ ВСЕ ВЫЛОЖЕНЫ ПОЗИЦИИ:\n• iPhone — 1 шт.", text)
         self.assertIn("🔴 УБРАТЬ ИЗ ВЫКЛАДКИ ПОЗИЦИИ:\n• iPhone — 1 шт.", text)
         self.assertIn("• iPhone — 1 шт.\n  ↳ ", text)
+        self.assertIn("iPhone Example, 128 ГБ, синий, eSIM, ОЗУ 4 ГБ, Новое", text)
+        self.assertIn("iPhone Example, 128 ГБ, белый, eSIM, ОЗУ 4 ГБ, Новое", text)
         self.assertIn("Watch Example", text)
         self.assertIn("\n\n━━━━━━━━━━━━━━━━━━━━\n\n🏬 Учебный магазин | Юг", text)
         self.assertNotIn("https://", text)

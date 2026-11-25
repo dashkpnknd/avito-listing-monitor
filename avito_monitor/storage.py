@@ -161,6 +161,8 @@ class Store:
                     "title": position.title, "category": position.category,
                     "source": position.source.link, "target": position.target.link,
                 }
+                if position.report_title:
+                    detail["report_title"] = position.report_title
                 backup = self.latest_backup(project_id, identity)
                 if backup and position.issue == "NEEDS_PUBLICATION":
                     detail["restore_available"] = True
@@ -201,7 +203,7 @@ class Store:
                 key = digest([project_id, identity, cycle])
                 self.db.execute("INSERT OR IGNORE INTO deliveries(key,body) VALUES (?,?)", (
                     f"event:{project_id}:{key}",
-                    f'{label} · {project["name"]}\n{item["title"]}\n{item["target"]}{restore}',
+                    f'{label} · {project["name"]}\n{item.get("report_title") or item["title"]}\n{item["target"]}{restore}',
                 ))
 
     def record_health(self, project, diagnostics, checked_at, notifications, prior):
@@ -307,7 +309,10 @@ class Store:
         saved = self.db.execute(
             "SELECT * FROM id_registry WHERE operation=?", (operation,)
         ).fetchone()
-        if saved["project"] != project or saved["data"] != payload:
+        old_context = json.loads(saved["data"])
+        old_context.pop("report_title", None)
+        context.pop("report_title", None)
+        if saved["project"] != project or old_context != context:
             raise ValueError("Операция уже связана с другим снимком")
         return saved["state"]
 

@@ -26,6 +26,17 @@ class AutomaticMatchingTests(TestCase):
         self.assertEqual(["NEEDS_PUBLICATION", "NEEDS_REMOVAL"], sorted(
             position.issue for position in positions.values() if position.issue
         ))
+        variants = {position.title: position.report_title for position in positions.values()}
+        self.assertEqual("iPhone Example, 128 ГБ, синий, eSIM, ОЗУ 4 ГБ, Новое", variants["iPhone Example, синий"])
+        self.assertEqual("Samsung Galaxy Example+, 256 ГБ, серый, SIM, ОЗУ 12 ГБ, Новое", variants["Galaxy Example+"])
+
+    def test_unknown_sim_is_explicit_without_guessing(self):
+        self.price[1][1] = literal("Не знаю")
+        self.feed[2][5] = literal("Не знаю")
+        positions, diagnostics = scan(self.project, self.fixture)
+        self.assertEqual([], diagnostics)
+        publication, = [position for position in positions.values() if position.issue == "NEEDS_PUBLICATION"]
+        self.assertEqual("iPhone Example, 128 ГБ, синий, SIM не указана, ОЗУ 4 ГБ, Новое", publication.report_title)
 
     def test_duplicate_source_preserves_other_known_positions(self):
         self.price.append(deepcopy(self.price[2]))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 import json
 import re
@@ -104,6 +104,65 @@ class Position:
     price: str | None
     issue: str | None
     marketplace_id: str | None = None
+    report_title: str | None = field(default=None, compare=False)
+
+
+REPORT_FIELDS = {
+    "vendor": ("vendor", "brand", "производитель", "бренд"),
+    "model": ("model", "модель"),
+    "memory": ("memorysize", "встроеннаяпамять", "объемпамяти", "storage"),
+    "color": ("color", "colour", "цвет"),
+    "sim": ("simconfig", "sim", "simкарты", "типsim"),
+    "ram": ("ramsize", "ram", "оперативнаяпамять", "озу"),
+    "drive": ("drivesize", "объемнакопителя"),
+    "chip": ("processor", "процессор"),
+    "size": ("casesize", "screensize", "размеркорпуса", "диагональэкрана"),
+    "connection": ("connectivity", "подключение"),
+    "variant": ("modification", "вариант", "модификация"),
+    "condition": ("condition", "состояние", "состояниетовара"),
+    "sku": ("sku", "partnumber", "артикул"),
+}
+
+
+def report_columns(header_row):
+    headers = [re.sub(r"[\W_]", "", canonical(cell_value(cell) or "").replace("ё", "е")) for cell in header_row]
+    columns = {}
+    for field_name, aliases in REPORT_FIELDS.items():
+        hits = [i for i, name in enumerate(headers) if name in aliases]
+        if len(hits) == 1:
+            columns[field_name] = hits[0]
+    return columns
+
+
+def describe_position(title, row, columns):
+    values = {}
+    for key, index in columns.items():
+        value = cell_value(row[index]) if index < len(row) else None
+        if value is not None and not isinstance(value, bool):
+            value = " ".join(str(value).split())
+            if canonical(value) not in {"", "-", "—", "не знаю", "не указано", "не указана", "unknown", "n/a"}:
+                values[key] = value
+    model = values.get("model")
+    phone = bool(model and "sim" in columns and values.get("memory"))
+    name = title
+    if phone:
+        vendor = values.get("vendor")
+        brand = vendor if vendor and not canonical(model).startswith(canonical(vendor)) else ""
+        if canonical(brand) == "apple" and canonical(model).startswith("iphone"):
+            brand = ""
+        name = " ".join(filter(None, (brand, model)))
+    parts = [name]
+    for key, label in (
+        ("model", ""), ("memory", ""), ("color", ""), ("sim", ""), ("ram", "ОЗУ "),
+        ("drive", "накопитель "), ("chip", ""), ("size", ""), ("connection", ""),
+        ("variant", ""), ("condition", ""), ("sku", "арт. "),
+    ):
+        value = values.get(key)
+        if key == "sim" and phone and not value:
+            parts.append("SIM не указана")
+        if value and (label or not re.search(r"(?<!\w)" + re.escape(canonical(value)) + r"(?!\w)", canonical(name))):
+            parts.append(label + value)
+    return ", ".join(parts) if len(parts) > 1 or name != title else None
 
 
 def extract(book, spec, grid, watch_field):
@@ -112,6 +171,7 @@ def extract(book, spec, grid, watch_field):
     if start != spec.get("first_col", 0) or len(rows) < header_row:
         raise ScanError("Не найдена строка технических заголовков")
     headers = [canonical(cell_value(cell)) for cell in rows[header_row - 1]]
+    variant_columns = report_columns(rows[header_row - 1]) if watch_field == "Id" else {}
     allowed = {watch_field, *spec["keys"], *spec.get("where", {})}
     if spec.get("title"):
         allowed.add(spec["title"])
@@ -167,13 +227,14 @@ def extract(book, spec, grid, watch_field):
         marketplace = cell_value(cell_at(row, marketplace_field)) if marketplace_field else None
         technical_listing = str(marketplace) if marketplace is not None else ""
         technical_listing = technical_listing if re.fullmatch(r"[0-9]+", technical_listing) else None
-        entries[key].append((address, cell, str(title or " · ".join(map(str, fields))), category, technical_listing))
+        title = str(title or " · ".join(map(str, fields)))
+        entries[key].append((address, cell, title, category, technical_listing, describe_position(title, row, variant_columns)))
     return entries, bad
 
 
 def matched_position(identity, source, target, diagnostics):
-    source_addr, price_cell, _, _, _ = source
-    target_addr, id_cell, title, category, marketplace_id = target
+    source_addr, price_cell = source[:2]
+    target_addr, id_cell, title, category, marketplace_id, report_title = target
     state, amount = price_state(price_cell)
     identifier = id_state(id_cell)
     if state in ("READ_ERROR", "INVALID") or identifier == "INVALID":
@@ -188,7 +249,7 @@ def matched_position(identity, source, target, diagnostics):
     }.get((state, identifier))
     return Position(
         identity, title, category, source_addr, target_addr,
-        price_cell, id_cell, state, amount, issue, marketplace_id,
+        price_cell, id_cell, state, amount, issue, marketplace_id, report_title,
     )
 
 
