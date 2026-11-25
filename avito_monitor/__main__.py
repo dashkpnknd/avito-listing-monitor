@@ -182,20 +182,27 @@ def run(args):
             bot = Telegram()
             if args.command == "dispatch":
                 if "sync" in config:
-                    from .incremental import daily_if_due
+                    from .incremental import daily_if_due, queue_first_report
 
-                    daily_if_due(
-                        store, config, [p for p in selected if p["mode"] == "monitoring"],
-                        datetime.now(timezone.utc), queue=True,
-                    )
+                    now = datetime.now(timezone.utc)
+                    active_projects = [p for p in selected if p["mode"] == "monitoring"]
+                    daily_if_due(store, config, active_projects, now, queue=True)
                 daily_result = deliver(store, bot, f"daily:{local_day.isoformat()}:")
+                first_results = {}
+                if "sync" in config and daily_result != "RATE_LIMIT":
+                    for project in active_projects:
+                        if project.get("first_report") and queue_first_report(store, config, project, now):
+                            project_id = project["id"]
+                            first_results[project_id] = deliver(store, bot, f"first:{project_id}:")
+                            if first_results[project_id] == "RATE_LIMIT":
+                                break
                 # A 429 may apply to the whole chat. Leave the other queue for the next tick.
                 event_result = (
-                    "RATE_LIMIT" if daily_result == "RATE_LIMIT"
+                    "RATE_LIMIT" if daily_result == "RATE_LIMIT" or "RATE_LIMIT" in first_results.values()
                     else deliver(store, bot, "event:", allowed_event_projects=allowed)
                 )
-                print(encode({"daily": daily_result, "events": event_result}))
-                return 0 if daily_result == event_result == "DONE" else 1
+                print(encode({"daily": daily_result, "events": event_result, "first": first_results}))
+                return 0 if daily_result == event_result == "DONE" and all(r == "DONE" for r in first_results.values()) else 1
             daily = local_day.isoformat() if args.daily == "today" else args.daily
             if daily:
                 datetime.strptime(daily, "%Y-%m-%d")

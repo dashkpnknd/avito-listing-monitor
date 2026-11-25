@@ -25,6 +25,8 @@ DIAGNOSTIC_LABELS = {
 
 
 def included(project, as_of):
+    if project["launch_date"] is None:
+        return False
     start = date.fromisoformat(project["launch_date"])
     return start <= as_of and as_of >= start + timedelta(days=project["report_exclude_days"])
 
@@ -33,13 +35,15 @@ def size(text):
     return len(text.encode("utf-16-le")) // 2
 
 
-def report(store, projects, cutoff, zone, *, max_age=None, health=None, detailed=False):
+def report(store, projects, cutoff, zone, *, max_age=None, health=None, detailed=False, first_report=False):
     local = cutoff.astimezone(ZoneInfo(zone))
     timestamp = local.strftime("%d.%m.%Y, %H:%M %Z")
     heading = f"📊 ВЫКЛАДКА AVITO · {timestamp}"
+    if first_report:
+        heading += " · первая сверка"
     blocks = []
     incomplete = []
-    eligible = [p for p in projects if included(p, local.date())]
+    eligible = [p for p in projects if first_report or included(p, local.date())]
     for project in eligible:
         project_id = project["id"]
         snapshot = store.snapshot_summary(project_id)

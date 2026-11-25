@@ -72,6 +72,7 @@ class Telegram:
 
 def deliver(store, telegram, prefix, *, allowed_event_projects=None):
     db = store.db
+    ordered = prefix.startswith(("daily:", "first:"))
     rows = db.execute(
         "SELECT * FROM deliveries WHERE substr(key,1,?)=? ORDER BY rowid",
         (len(prefix), prefix),
@@ -93,7 +94,7 @@ def deliver(store, telegram, prefix, *, allowed_event_projects=None):
         if state == "RATE_LIMIT" and int(receipt) > time.time():
             return state
         if state not in ("PENDING", "RATE_LIMIT") or row["tries"] >= 3:
-            if prefix.startswith("daily:") or state == "RATE_LIMIT":
+            if ordered or state == "RATE_LIMIT":
                 return state
             continue
         attempt = row["tries"] + 1
@@ -122,6 +123,6 @@ def deliver(store, telegram, prefix, *, allowed_event_projects=None):
                 "UPDATE delivery_attempts SET outcome=? WHERE key=? AND attempt=?",
                 (state, row["key"], attempt),
             )
-        if state in ("RATE_LIMIT", "UNCERTAIN") or (prefix.startswith("daily:") and state != "SENT"):
+        if state in ("RATE_LIMIT", "UNCERTAIN") or (ordered and state != "SENT"):
             return state
     return "DONE"

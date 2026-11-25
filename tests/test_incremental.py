@@ -7,7 +7,7 @@ from unittest import TestCase
 from avito_monitor.adapters import Fixture, literal
 from avito_monitor.config import validate
 from avito_monitor.drive import CursorRejected, DriveChanges
-from avito_monitor.incremental import daily_if_due, saved_report, tick
+from avito_monitor.incremental import daily_if_due, queue_first_report, saved_report, tick
 from avito_monitor.model import ReadQuota, ScanError
 from avito_monitor.storage import locked_db
 
@@ -78,6 +78,23 @@ class IncrementalTests(TestCase):
     def update(self, store, config, reader, minute):
         return tick(store, config, config["projects"], START + timedelta(minutes=minute),
                     reader=lambda _: reader, drive_factory=lambda: self.journal)[0]
+
+    def test_first_report_waits_for_sync_and_queues_once_without_launch_date(self):
+        config, reader = sample_config(1)
+        project, = config["projects"]
+        project.update(launch_date=None, first_report=True)
+        reader.books["source-0", 10][1][1] = literal(15000)
+        with locked_db(self.path) as store:
+            self.assertFalse(queue_first_report(store, config, project, START))
+            self.update(store, config, reader, 0)
+            self.assertTrue(queue_first_report(store, config, project, START))
+            self.assertTrue(queue_first_report(store, config, project, START))
+            key, body = store.db.execute("SELECT key,body FROM deliveries").fetchone()
+            self.assertEqual("first:shop-000:1", key)
+            self.assertIn("первая сверка", body)
+            self.assertIn("Позиция 0", body)
+            self.assertEqual([], daily_if_due(store, config, [project], START + timedelta(hours=2), queue=True))
+            self.assertEqual(1, store.db.execute("SELECT count(*) FROM deliveries").fetchone()[0])
 
     def test_three_hundred_projects_change_on_one_side_and_report_without_reads(self):
         config, reader = sample_config(300, rows=100, max_projects_per_tick=6)

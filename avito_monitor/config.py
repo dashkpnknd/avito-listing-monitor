@@ -98,8 +98,10 @@ def validate(config, config_directory):
             project.get("removal_confirmation", "feed_then_avito") in {"feed_then_avito", "avito_status"},
             f"{project_id}: неизвестный способ подтверждения снятия",
         )
-        for flag in ("notify_removal", "notifications_enabled", "notify_during_grace", "auto_remove"):
+        for flag in ("notify_removal", "notifications_enabled", "notify_during_grace", "auto_remove", "first_report"):
             require(type(project.get(flag, True)) is bool, f"{flag} должен быть boolean")
+        if project.get("first_report"):
+            require("sync" in config, f"{project_id}: первая сводка требует синхронизации")
         if "avito_credential_prefix" in project:
             require(
                 re.fullmatch(r"[A-Z][A-Z0-9_]*", project["avito_credential_prefix"]),
@@ -120,7 +122,8 @@ def validate(config, config_directory):
             require(project["target_book"] not in seen_targets, "Повторяется таблица автозагрузки")
             seen_targets.add(project["target_book"])
         seen_ids.add(project_id)
-        date.fromisoformat(project["launch_date"])
+        if project["launch_date"] is not None:
+            date.fromisoformat(project["launch_date"])
         require(
             type(project["report_exclude_days"]) is int and project["report_exclude_days"] >= 0,
             "report_exclude_days должен быть целым неотрицательным числом",
