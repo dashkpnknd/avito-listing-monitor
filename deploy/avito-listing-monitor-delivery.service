@@ -1,0 +1,19 @@
+[Unit]
+Description=Deliver queued Avito listing monitor notifications
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=avito-monitor
+WorkingDirectory=/opt/avito-listing-monitor
+StateDirectory=avito-listing-monitor
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/etc/avito-listing-monitor/runtime.env
+ExecStart=/opt/avito-listing-monitor/.venv/bin/python -m avito_monitor --config /etc/avito-listing-monitor/projects.json --db /var/lib/avito-listing-monitor/state.sqlite dispatch
+SuccessExitStatus=1
+StandardOutput=null
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes

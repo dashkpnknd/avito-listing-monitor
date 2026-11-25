@@ -1,0 +1,10 @@
+[Unit]
+Description=Deliver queued Avito listing monitor notifications
+
+[Timer]
+OnCalendar=*-*-* *:*:15
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -7,9 +7,15 @@ import json
 import re
 import unicodedata
 
+from .coverage import unmapped_targets
+
 
 class ScanError(Exception):
     """A safe description of a failed or incomplete read."""
+
+
+class ReadQuota(ScanError):
+    """The shared request budget is exhausted until the next run."""
 
 
 def canonical(value):
@@ -97,6 +103,7 @@ class Position:
     state: str
     price: str | None
     issue: str | None
+    marketplace_id: str | None = None
 
 
 def extract(book, spec, grid, watch_field):
@@ -116,6 +123,16 @@ def extract(book, spec, grid, watch_field):
         if len(matches) != 1:
             raise ScanError(f"Заголовок {field!r} отсутствует или повторяется")
         columns[field] = matches[0]
+    marketplace_field = spec.get("marketplace_field")
+    if marketplace_field:
+        line = spec.get("marketplace_header_row", header_row)
+        if not 1 <= line <= len(rows):
+            raise ScanError("Не найдена строка заголовка номера объявления")
+        matching = [i for i, cell in enumerate(rows[line - 1])
+                    if canonical(cell_value(cell)) == canonical(marketplace_field)]
+        if len(matching) != 1:
+            raise ScanError("Не найден единственный заголовок номера объявления")
+        columns[marketplace_field] = matching[0]
 
     def cell_at(row, field):
         index = columns[field]
@@ -147,15 +164,62 @@ def extract(book, spec, grid, watch_field):
             category = {canonical(k): v for k, v in spec["categories"].items()}.get(
                 category_value, "Прочее"
             )
-        entries[key].append((address, cell, str(title or " · ".join(map(str, fields))), category))
+        marketplace = cell_value(cell_at(row, marketplace_field)) if marketplace_field else None
+        technical_listing = str(marketplace) if marketplace is not None else ""
+        technical_listing = technical_listing if re.fullmatch(r"[0-9]+", technical_listing) else None
+        entries[key].append((address, cell, str(title or " · ".join(map(str, fields))), category, technical_listing))
     return entries, bad
 
 
+def matched_position(identity, source, target, diagnostics):
+    source_addr, price_cell, _, _, _ = source
+    target_addr, id_cell, title, category, marketplace_id = target
+    state, amount = price_state(price_cell)
+    identifier = id_state(id_cell)
+    if state in ("READ_ERROR", "INVALID") or identifier == "INVALID":
+        diagnostics.append({
+            "code": "READ_ERROR" if state == "READ_ERROR" else "INVALID_CELL",
+            "detail": "Неразобранная цена или Id",
+            "links": [source_addr.link, target_addr.link],
+        })
+    issue = {
+        ("POSITIVE", "EMPTY"): "NEEDS_PUBLICATION",
+        ("EMPTY", "PRESENT"): "NEEDS_REMOVAL",
+    }.get((state, identifier))
+    return Position(
+        identity, title, category, source_addr, target_addr,
+        price_cell, id_cell, state, amount, issue, marketplace_id,
+    )
+
+
+def unique_positions(positions, diagnostics):
+    claims = defaultdict(list)
+    for identity, position in positions.items():
+        claims[position.target].append(identity)
+        claims[position.source].append(identity)
+    for address, identities in claims.items():
+        if len(identities) > 1:
+            diagnostics.append({
+                "code": "MATCH_UNCERTAIN", "detail": "Одна ячейка соответствует нескольким строкам",
+                "links": [address.link],
+            })
+            for identity in identities:
+                positions.pop(identity, None)
+    return positions
+
+
+def removal_blocked(project, diagnostics):
+    if project.get("routes"):
+        return bool(diagnostics)
+    return any(item["code"] != "MATCH_UNCERTAIN" for item in diagnostics)
+
+
 def scan(project, adapter):
+    if not project.get("routes"):
+        from .automatic import automatic_scan
+        return automatic_scan(project, adapter)
     positions = {}
     diagnostics = []
-    claims = defaultdict(list)
-    source_claims = defaultdict(list)
     for route in project["routes"]:
         source_spec = route["source"]
         target_spec = route["target"]
@@ -183,36 +247,11 @@ def scan(project, adapter):
                     "links": [entry[0].link for entry in src + dst],
                 })
                 continue
-            source_addr, price_cell, _, _ = src[0]
-            target_addr, id_cell, title, category = dst[0]
             identity = json.dumps([
                 project["source_book"], source_spec["gid"], project["target_book"],
                 target_spec["gid"], route["name"], key,
             ], ensure_ascii=False, separators=(",", ":"))
-            state, amount = price_state(price_cell)
-            identifier = id_state(id_cell)
-            if state in ("READ_ERROR", "INVALID") or identifier == "INVALID":
-                diagnostics.append({
-                    "code": "READ_ERROR" if state == "READ_ERROR" else "INVALID_CELL",
-                    "detail": "Неразобранная цена или Id",
-                    "links": [source_addr.link, target_addr.link],
-                })
-            issue = {
-                ("POSITIVE", "EMPTY"): "NEEDS_PUBLICATION",
-                ("EMPTY", "PRESENT"): "NEEDS_REMOVAL",
-            }.get((state, identifier))
-            positions[identity] = Position(
-                identity, title, category, source_addr, target_addr,
-                price_cell, id_cell, state, amount, issue,
-            )
-            claims[target_addr].append(identity)
-            source_claims[source_addr].append(identity)
-    for address, identities in [*claims.items(), *source_claims.items()]:
-        if len(identities) > 1:
-            diagnostics.append({
-                "code": "MATCH_UNCERTAIN", "detail": "Одна ячейка входит в несколько правил",
-                "links": [address.link],
-            })
-            for identity in identities:
-                positions.pop(identity, None)
+            positions[identity] = matched_position(identity, src[0], dst[0], diagnostics)
+    unique_positions(positions, diagnostics)
+    diagnostics.extend(unmapped_targets(project, adapter))
     return positions, diagnostics

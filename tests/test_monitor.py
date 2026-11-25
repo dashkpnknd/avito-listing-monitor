@@ -148,7 +148,7 @@ class MonitorTests(TestCase):
         self.fixture.books.pop(("demo-price-north", 10))
         _, _, cutoff = self.take_scan(hour=9)
         self.take_scan(self.south, hour=9)
-        text = "\n".join(report(self.store, [self.north, self.south], cutoff, "Europe/Moscow"))
+        text = "\n".join(report(self.store, [self.north, self.south], cutoff, "Europe/Moscow", detailed=True))
         self.assertIn("Не удалось проверить полностью", text)
         self.assertIn("Watch Example", text)
         self.assertNotIn("белый", text)
@@ -167,11 +167,33 @@ class MonitorTests(TestCase):
             self.fixture.books["demo-feed-south", 40].append([{}, literal(title)])
         self.south["launch_date"] = "2026-11-01"
         _, _, cutoff = self.take_scan(self.south)
-        pages = report(self.store, [self.south], cutoff, "Europe/Moscow")
+        pages = report(self.store, [self.south], cutoff, "Europe/Moscow", detailed=True)
         self.assertGreater(len(pages), 1)
         self.assertTrue(all(size(page) <= 4096 for page in pages))
         self.assertIn("Demo watch 🟠 199", pages[-1])
         self.assertIn(f"1/{len(pages)}", pages[0])
+
+    def test_daily_summary_counts_categories_and_keeps_project_blocks(self):
+        _, _, cutoff = self.take_scan()
+        self.take_scan(self.south)
+        text, = report(self.store, [self.north, self.south], cutoff, "Europe/Moscow")
+        self.assertIn("🏬 Учебный магазин | Север\n\n🟠 НЕ ВСЕ ВЫЛОЖЕНЫ ПОЗИЦИИ:\n• iPhone — 1 шт.", text)
+        self.assertIn("🔴 УБРАТЬ ИЗ ВЫКЛАДКИ ПОЗИЦИИ:\n• iPhone — 1 шт.", text)
+        self.assertIn("\n\n━━━━━━━━━━━━━━━━━━━━\n\n🏬 Учебный магазин | Юг", text)
+        self.assertNotIn("https://", text)
+
+    def test_summary_counts_an_unconfirmed_removal_once_until_confirmation(self):
+        project = self.north
+        _, _, cutoff = self.take_scan(project)
+        single_removal(self.store, self.fixture, project, TARGET, OPERATION)
+        before_refresh, = report(self.store, [project], cutoff, "Europe/Moscow")
+        self.assertIn("УБРАТЬ ИЗ ВЫКЛАДКИ ПОЗИЦИИ:\n• iPhone — 1 шт.", before_refresh)
+        _, _, cutoff = self.take_scan(project, hour=9)
+        while_pending, = report(self.store, [project], cutoff, "Europe/Moscow")
+        self.assertIn("УБРАТЬ ИЗ ВЫКЛАДКИ ПОЗИЦИИ:\n• iPhone — 1 шт.", while_pending)
+        self.store.transition(OPERATION, "WAITING_FEED_CONFIRMATION", "REMOVED_FROM_AVITO")
+        after_confirmation, = report(self.store, [project], cutoff, "Europe/Moscow")
+        self.assertIn("УБРАТЬ ИЗ ВЫКЛАДКИ ПОЗИЦИИ:\n• Нет позиций", after_confirmation)
 
     def test_ambiguous_delivery_is_never_repeated(self):
         class Fake:

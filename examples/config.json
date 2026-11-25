@@ -16,7 +16,7 @@
         {
           "name": "phones-apple",
           "source": {"gid": 10, "header_row": 1, "first_col": 0, "last_col": 5, "keys": ["Model", "MemorySize", "SimConfig", "Color"], "price": "Price"},
-          "target": {"gid": 20, "header_row": 2, "keys": ["Model", "MemorySize", "SimConfig", "Color"], "where": {"Vendor": "Apple", "Condition": "Новое"}, "title": "Title", "category": "iPhone"}
+          "target": {"gid": 20, "header_row": 2, "keys": ["Model", "MemorySize", "SimConfig", "Color"], "where": {"Vendor": "Apple", "Condition": "Новое"}, "title": "Title", "marketplace_field": "AvitoId", "category": "iPhone"}
         },
         {
           "name": "phones-samsung",
