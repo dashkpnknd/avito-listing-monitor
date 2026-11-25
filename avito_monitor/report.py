@@ -1,7 +1,8 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import json
+import re
 
 from .storage import encode
 
@@ -103,22 +104,39 @@ def project_lines(store, project, snapshot, *, detailed):
     for kind, label in LABELS.items():
         lines.extend(["", label])
         items = entries[kind]
-        counts = Counter(item["category"] for item in items.values())
-        lines.extend(f"• {category} — {count} шт." for category, count in sorted(counts.items(), key=lambda item: item[0].casefold()))
-        if not counts:
-            lines.append("• Нет позиций")
-        if not detailed:
-            continue
+        categories = defaultdict(list)
         for identity, item in items.items():
-            line = f'↳ {item["title"]} · {item["target"]}'
-            if item.get("previous_id") is not None:
-                line += f' · прежний Id {item["previous_id"]}'
-            if kind == "NEEDS_REMOVAL" and identity in pending:
-                line += " · снятие на проверке"
-            lines.append(line)
-    if project.get("details_url"):
+            categories[item["category"]].append((identity, item))
+        if not categories:
+            lines.append("• Нет позиций")
+        for index, category in enumerate(sorted(categories, key=str.casefold)):
+            positions = categories[category]
+            names = Counter(item["title"] for _, item in positions)
+            if index:
+                lines.append("")
+            lines.append(f"• {category} — {len(positions)} шт.")
+            for identity, item in sorted(positions, key=position_order):
+                name = " ".join(item["title"].split())
+                cell = item["target"].partition("&range=")[2]
+                line = f"  ↳ {name}"
+                if detailed:
+                    line += f' · {item["target"]}'
+                elif cell and names[item["title"]] > 1:
+                    line += f" · {cell}"
+                if item.get("previous_id") is not None:
+                    line += f' · прежний Id {item["previous_id"]}'
+                if identity in pending and kind == "NEEDS_REMOVAL":
+                    line += " · снятие на проверке"
+                lines.append(line)
+    if detailed and project.get("details_url"):
         lines.extend(["", project["details_url"]])
     return lines
+
+
+def position_order(entry):
+    _, item = entry
+    match = re.search(r"&range=([A-Z]+)([0-9]+)$", item["target"])
+    return (item["title"].casefold(), int(match[2]) if match else 0, item["target"])
 
 
 def paginate(heading, blocks):
@@ -137,11 +155,23 @@ def paginate(heading, blocks):
         if part:
             drafts.append(part)
         part = label
-        for line in lines:
+        section = category = ""
+        for index, line in enumerate(lines):
             continuation = f"{label} (продолжение)"
-            if size(continuation) + size(line) + 1 > limit:
-                line = line.encode("utf-16-le")[: 2 * (limit - size(continuation) - 2)].decode("utf-16-le", "ignore") + "…"
-            if size(part + "\n" + line) > limit:
+            if line in LABELS.values():
+                section, category = line, ""
+            elif section and line.startswith("• ") and line.endswith(" шт."):
+                category = line
+                continuation += f"\n\n{section}"
+            elif line.startswith("  ↳ ") and category:
+                continuation += f"\n\n{section}\n{category}"
+            room = max(0, limit - size(continuation) - 1)
+            if size(line) > room:
+                line = line.encode("utf-16-le")[: 2 * max(0, room - 1)].decode("utf-16-le", "ignore") + "…"
+            reserve = 0
+            if line == category and index + 1 < len(lines):
+                reserve = min(160, size(lines[index + 1]) + 1)
+            if size(part + "\n" + line) + reserve > limit:
                 drafts.append(part.rstrip())
                 part = continuation
             part += "\n" + line

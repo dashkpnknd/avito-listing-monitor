@@ -172,6 +172,7 @@ class MonitorTests(TestCase):
         self.assertTrue(all(size(page) <= 4096 for page in pages))
         self.assertIn("Demo watch 🟠 199", pages[-1])
         self.assertIn(f"1/{len(pages)}", pages[0])
+        self.assertTrue(all("🟠 НЕ ВСЕ ВЫЛОЖЕНЫ ПОЗИЦИИ:" in page for page in pages))
 
     def test_daily_summary_counts_categories_and_keeps_project_blocks(self):
         _, _, cutoff = self.take_scan()
@@ -179,6 +180,8 @@ class MonitorTests(TestCase):
         text, = report(self.store, [self.north, self.south], cutoff, "Europe/Moscow")
         self.assertIn("🏬 Учебный магазин | Север\n\n🟠 НЕ ВСЕ ВЫЛОЖЕНЫ ПОЗИЦИИ:\n• iPhone — 1 шт.", text)
         self.assertIn("🔴 УБРАТЬ ИЗ ВЫКЛАДКИ ПОЗИЦИИ:\n• iPhone — 1 шт.", text)
+        self.assertIn("• iPhone — 1 шт.\n  ↳ ", text)
+        self.assertIn("Watch Example", text)
         self.assertIn("\n\n━━━━━━━━━━━━━━━━━━━━\n\n🏬 Учебный магазин | Юг", text)
         self.assertNotIn("https://", text)
 
